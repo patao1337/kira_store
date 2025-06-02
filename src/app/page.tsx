@@ -5,109 +5,9 @@ import Header from "@/components/homepage/Header";
 import Reviews from "@/components/homepage/Reviews";
 import { Product } from "@/types/product.types";
 import { Review } from "@/types/review.types";
+import { getProducts } from "@/lib/services/product.service";
 
-export const newArrivalsData: Product[] = [
-  {
-    id: 1,
-    title: "Футболка з декоративними деталями",
-    srcUrl: "/images/pic1.png",
-    gallery: ["/images/pic1.png", "/images/pic10.png", "/images/pic11.png"],
-    price: 120,
-    discount: {
-      amount: 0,
-      percentage: 0,
-    },
-    rating: 4.5,
-  },
-  {
-    id: 2,
-    title: "Джинси скінні",
-    srcUrl: "/images/pic2.png",
-    gallery: ["/images/pic2.png"],
-    price: 260,
-    discount: {
-      amount: 0,
-      percentage: 20,
-    },
-    rating: 3.5,
-  },
-  {
-    id: 3,
-    title: "Сорочка в клітинку",
-    srcUrl: "/images/pic3.png",
-    gallery: ["/images/pic3.png"],
-    price: 180,
-    discount: {
-      amount: 0,
-      percentage: 0,
-    },
-    rating: 4.5,
-  },
-  {
-    id: 4,
-    title: "Футболка в смужку",
-    srcUrl: "/images/pic4.png",
-    gallery: ["/images/pic4.png", "/images/pic10.png", "/images/pic11.png"],
-    price: 160,
-    discount: {
-      amount: 0,
-      percentage: 30,
-    },
-    rating: 4.5,
-  },
-];
-
-export const topSellingData: Product[] = [
-  {
-    id: 5,
-    title: "Сорочка з вертикальними смужками",
-    srcUrl: "/images/pic5.png",
-    gallery: ["/images/pic5.png", "/images/pic10.png", "/images/pic11.png"],
-    price: 232,
-    discount: {
-      amount: 0,
-      percentage: 20,
-    },
-    rating: 5.0,
-  },
-  {
-    id: 6,
-    title: "Футболка з графічним принтом",
-    srcUrl: "/images/pic6.png",
-    gallery: ["/images/pic6.png", "/images/pic10.png", "/images/pic11.png"],
-    price: 145,
-    discount: {
-      amount: 0,
-      percentage: 0,
-    },
-    rating: 4.0,
-  },
-  {
-    id: 7,
-    title: "Вільні шорти-бермуди",
-    srcUrl: "/images/pic7.png",
-    gallery: ["/images/pic7.png"],
-    price: 80,
-    discount: {
-      amount: 0,
-      percentage: 0,
-    },
-    rating: 3.0,
-  },
-  {
-    id: 8,
-    title: "Потерті джинси скінні",
-    srcUrl: "/images/pic8.png",
-    gallery: ["/images/pic8.png"],
-    price: 210,
-    discount: {
-      amount: 0,
-      percentage: 0,
-    },
-    rating: 4.5,
-  },
-];
-
+// Keep static data for reviews and related products (for fallback)
 export const relatedProductData: Product[] = [
   {
     id: 12,
@@ -199,7 +99,18 @@ export const reviewsData: Review[] = [
   },
 ];
 
-export default function Home() {
+export default async function Home() {
+  // Fetch real product data from Supabase
+  const newArrivalsData = await getProducts({
+    sort: 'newest',
+    limit: 4,
+  });
+
+  const topSellingData = await getProducts({
+    sort: 'rating-desc',
+    limit: 4,
+  });
+
   return (
     <>
       <Header />

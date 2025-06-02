@@ -1,23 +1,14 @@
-import {
-  newArrivalsData,
-  relatedProductData,
-  topSellingData,
-} from "@/app/page";
 import ProductListSec from "@/components/common/ProductListSec";
 import BreadcrumbProduct from "@/components/product-page/BreadcrumbProduct";
 import Header from "@/components/product-page/Header";
 import Tabs from "@/components/product-page/Tabs";
 import { Product } from "@/types/product.types";
 import { notFound } from "next/navigation";
+import { getProductById, getProducts } from "@/lib/services/product.service";
+import { relatedProductData } from "@/app/page"; // Keep static data for related products for now
 
 // Type for the resolved params
 type PageParams = { slug: string[] };
-
-const data: Product[] = [
-  ...newArrivalsData,
-  ...topSellingData,
-  ...relatedProductData,
-];
 
 // Make the component async and adjust props type
 export default async function ProductPage({
@@ -28,9 +19,10 @@ export default async function ProductPage({
 }) {
   // Await the params before accessing them
   const resolvedParams = await params;
-  const productData = data.find(
-    (product) => product.id === Number(resolvedParams.slug[0])
-  );
+  const productId = Number(resolvedParams.slug[0]);
+
+  // Fetch the product from Supabase
+  const productData = await getProductById(productId);
 
   if (!productData?.title) {
     notFound();
@@ -47,7 +39,7 @@ export default async function ProductPage({
         <Tabs />
       </div>
       <div className="mb-[50px] sm:mb-20">
-        <ProductListSec title="You might also like" data={relatedProductData} />
+        <ProductListSec title="Вам Сподобається:" data={relatedProductData} />
       </div>
     </main>
   );

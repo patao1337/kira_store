@@ -11,6 +11,7 @@ import {
   AdminProductInput,
   ProductDB
 } from "@/lib/services/product.service";
+import { supabase } from "@/lib/supabase";
 
 interface ProductFormProps {
   productId?: number;
@@ -25,6 +26,9 @@ export default function ProductForm({ productId }: ProductFormProps) {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [categories, setCategories] = useState<{id: number, name: string, slug: string}[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const [mainImageFile, setMainImageFile] = useState<File | null>(null);
+  const [galleryFiles, setGalleryFiles] = useState<File[]>([]);
   
   const [formData, setFormData] = useState<AdminProductInput>({
     title: "",
@@ -80,6 +84,28 @@ export default function ProductForm({ productId }: ProductFormProps) {
     fetchProduct();
   }, [productId]);
 
+  const uploadImage = async (file: File, folder: string = "main"): Promise<string | null> => {
+    try {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${folder}/${Date.now()}-${Math.random()}.${fileExt}`;
+      
+      const { error: uploadError } = await supabase.storage
+        .from('products')
+        .upload(fileName, file);
+
+      if (uploadError) {
+        console.error('Upload error:', uploadError);
+        return null;
+      }
+
+      const { data } = supabase.storage.from('products').getPublicUrl(fileName);
+      return data.publicUrl;
+    } catch (error) {
+      console.error('Error uploading image:', error);
+      return null;
+    }
+  };
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value, type } = e.target as HTMLInputElement;
     
@@ -102,32 +128,63 @@ export default function ProductForm({ productId }: ProductFormProps) {
     }
   };
 
+  const handleMainImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      setMainImageFile(e.target.files[0]);
+    }
+  };
+
   const handleGalleryChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { value } = e.target;
-    // Split by commas and trim whitespace
-    const gallery = value
-      .split(",")
-      .map(url => url.trim())
-      .filter(url => url !== "");
-    
-    setFormData({
-      ...formData,
-      gallery
-    });
+    if (e.target.files) {
+      setGalleryFiles(Array.from(e.target.files));
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
+    setUploading(true);
     setError(null);
     setSuccess(null);
 
     try {
+      let updatedFormData = { ...formData };
+
+      // Upload main image if a new file is selected
+      if (mainImageFile) {
+        const mainImageUrl = await uploadImage(mainImageFile, "main");
+        if (mainImageUrl) {
+          updatedFormData.src_url = mainImageUrl;
+        } else {
+          throw new Error("Не вдалося завантажити головне зображення");
+        }
+      }
+
+      // Upload gallery images if new files are selected
+      if (galleryFiles.length > 0) {
+        const galleryUrls = [];
+        for (const file of galleryFiles) {
+          const url = await uploadImage(file, "gallery");
+          if (url) {
+            galleryUrls.push(url);
+          }
+        }
+        
+        if (galleryUrls.length > 0) {
+          // If editing, append to existing gallery, otherwise replace
+          if (isEditing) {
+            updatedFormData.gallery = [...(formData.gallery || []), ...galleryUrls];
+          } else {
+            updatedFormData.gallery = galleryUrls;
+          }
+        }
+      }
+
       if (isEditing) {
-        await updateProduct(productId, formData);
+        await updateProduct(productId, updatedFormData);
         setSuccess("Товар успішно оновлено!");
       } else {
-        await createProduct(formData);
+        await createProduct(updatedFormData);
         setSuccess("Товар успішно створено!");
         // Reset form after successful creation
         setFormData({
@@ -141,13 +198,25 @@ export default function ProductForm({ productId }: ProductFormProps) {
           category: "",
           in_stock: true
         });
+        setMainImageFile(null);
+        setGalleryFiles([]);
       }
     } catch (err) {
       console.error("Error saving product:", err);
-      setError("Не вдалося зберегти товар");
+      setError(err instanceof Error ? err.message : "Не вдалося зберегти товар");
     } finally {
       setSubmitting(false);
+      setUploading(false);
     }
+  };
+
+  const removeGalleryImage = (index: number) => {
+    const newGallery = [...(formData.gallery || [])];
+    newGallery.splice(index, 1);
+    setFormData({
+      ...formData,
+      gallery: newGallery
+    });
   };
 
   if (loading) {
@@ -254,51 +323,6 @@ export default function ProductForm({ productId }: ProductFormProps) {
                 />
               </div>
             </div>
-          </div>
-          
-          <div className="space-y-4">
-            <div>
-              <label htmlFor="src_url" className="block text-sm font-medium text-gray-700 mb-1">
-                URL головного зображення*
-              </label>
-              <input
-                type="url"
-                id="src_url"
-                name="src_url"
-                value={formData.src_url}
-                onChange={handleChange}
-                required
-                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-              />
-              {formData.src_url && (
-                <div className="mt-2 relative h-40 w-full overflow-hidden rounded-md">
-                  <Image 
-                    src={formData.src_url} 
-                    alt="Перегляд товару"
-                    fill
-                    style={{ objectFit: "contain" }}
-                    className="border border-gray-200 rounded-md"
-                  />
-                </div>
-              )}
-            </div>
-            
-            <div>
-              <label htmlFor="gallery" className="block text-sm font-medium text-gray-700 mb-1">
-                URL зображень галереї (розділені комами)
-              </label>
-              <input
-                type="text"
-                id="gallery"
-                name="gallery"
-                value={formData.gallery?.join(", ")}
-                onChange={handleGalleryChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-              />
-              <div className="text-xs text-gray-500 mt-1">
-                Введіть URL зображень, розділені комами
-              </div>
-            </div>
             
             <div>
               <label htmlFor="category" className="block text-sm font-medium text-gray-700 mb-1">
@@ -334,15 +358,114 @@ export default function ProductForm({ productId }: ProductFormProps) {
               </label>
             </div>
           </div>
+          
+          <div className="space-y-4">
+            {/* Main Image Upload */}
+            <div>
+              <label htmlFor="main_image" className="block text-sm font-medium text-gray-700 mb-1">
+                Головне зображення*
+              </label>
+              <input
+                type="file"
+                id="main_image"
+                accept="image/*"
+                onChange={handleMainImageChange}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+              />
+              <div className="text-xs text-gray-500 mt-1">
+                Завантажте зображення (JPG, PNG, WebP)
+              </div>
+              
+              {/* Current main image preview */}
+              {(formData.src_url || mainImageFile) && (
+                <div className="mt-2 relative h-40 w-full overflow-hidden rounded-md">
+                  <Image 
+                    src={mainImageFile ? URL.createObjectURL(mainImageFile) : formData.src_url} 
+                    alt="Перегляд товару"
+                    fill
+                    style={{ objectFit: "contain" }}
+                    className="border border-gray-200 rounded-md"
+                  />
+                </div>
+              )}
+            </div>
+            
+            {/* Gallery Images Upload */}
+            <div>
+              <label htmlFor="gallery_images" className="block text-sm font-medium text-gray-700 mb-1">
+                Зображення галереї
+              </label>
+              <input
+                type="file"
+                id="gallery_images"
+                accept="image/*"
+                multiple
+                onChange={handleGalleryChange}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+              />
+              <div className="text-xs text-gray-500 mt-1">
+                Виберіть кілька зображень для галереї
+              </div>
+              
+              {/* Current gallery images */}
+              {formData.gallery && formData.gallery.length > 0 && (
+                <div className="mt-2">
+                  <div className="text-sm font-medium text-gray-700 mb-2">Поточні зображення галереї:</div>
+                  <div className="grid grid-cols-2 gap-2">
+                    {formData.gallery.map((url, index) => (
+                      <div key={index} className="relative">
+                        <div className="relative h-20 w-full overflow-hidden rounded-md">
+                          <Image 
+                            src={url} 
+                            alt={`Галерея ${index + 1}`}
+                            fill
+                            style={{ objectFit: "cover" }}
+                            className="border border-gray-200 rounded-md"
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => removeGalleryImage(index)}
+                          className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full h-5 w-5 flex items-center justify-center text-xs hover:bg-red-600"
+                        >
+                          ×
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              
+              {/* Preview new gallery images */}
+              {galleryFiles.length > 0 && (
+                <div className="mt-2">
+                  <div className="text-sm font-medium text-gray-700 mb-2">Нові зображення для завантаження:</div>
+                  <div className="grid grid-cols-2 gap-2">
+                    {galleryFiles.map((file, index) => (
+                      <div key={index} className="relative h-20 w-full overflow-hidden rounded-md">
+                        <Image 
+                          src={URL.createObjectURL(file)} 
+                          alt={`Нове ${index + 1}`}
+                          fill
+                          style={{ objectFit: "cover" }}
+                          className="border border-gray-200 rounded-md"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
         
         <div className="flex gap-4 mt-8">
           <button
             type="submit"
-            disabled={submitting}
+            disabled={submitting || uploading}
             className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {submitting ? "Збереження..." : isEditing ? "Оновити товар" : "Створити товар"}
+            {uploading ? "Завантаження зображень..." : submitting ? "Збереження..." : isEditing ? "Оновити товар" : "Створити товар"}
           </button>
           
           <button

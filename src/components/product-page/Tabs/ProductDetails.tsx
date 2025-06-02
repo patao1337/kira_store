@@ -7,20 +7,20 @@ export type SpecItem = {
 
 const specsData: SpecItem[] = [
   {
-    label: " Material composition",
-    value: "100% Cotton",
+    label: "Матеріал",
+    value: "100% Бавовна",
   },
   {
-    label: "Care instructions",
-    value: "Machine wash warm, tumble dry",
+    label: "Інструкція по догляду",
+    value: "Машинне прання, сушіння",
   },
   {
-    label: "Fit type",
-    value: "Classic Fit",
+    label: "Тип підгонки",
+    value: "Класичний",
   },
   {
-    label: "Pattern",
-    value: "Solid",
+    label: "Паттерн",
+    value: "Суцільний",
   },
 ];
 
